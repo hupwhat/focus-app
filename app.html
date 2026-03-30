@@ -114,7 +114,11 @@ body.mode-work .task-card.completed .chk{background:var(--work-accent);border-co
 body.mode-personal .task-card.completed .chk{background:var(--per-accent);border-color:var(--per-accent)}
 .chk::after{content:'';width:5px;height:9px;border:2px solid #fff;border-top:none;border-left:none;transform:rotate(45deg) translateY(-1px);display:none}
 .task-card.completed .chk::after{display:block}
-.task-txt{flex:1;font-size:14px;line-height:1.4;outline:none;cursor:text;min-width:0;-webkit-user-select:text;user-select:text}
+.task-txt{flex:1;font-size:14px;line-height:1.4;min-width:0;cursor:default;-webkit-user-select:none;user-select:none}
+.task-txt.editing{outline:none;cursor:text;-webkit-user-select:text;user-select:text}
+.task-edit-btn{opacity:0;background:none;border:none;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:4px;transition:opacity var(--t);color:inherit;flex-shrink:0}
+.task-card:hover .task-edit-btn{opacity:.3}
+.task-edit-btn:hover{opacity:.7!important}
 .due-tag{font-size:11px;font-weight:500;flex-shrink:0;padding:2px 6px;border-radius:4px}
 .due-tag.overdue{color:var(--overdue);background:rgba(192,57,43,.1)}
 .due-tag.soon{color:var(--soon)}
@@ -744,12 +748,19 @@ function applyMode(m){
 function initMode(){applyMode(autoMode())}
 
 // ── UPCOMING ──────────────────────────────────────────────────
-function mtgTs(m){const d=new Date(m.date);if(m.time){const[h,mi]=m.time.split(':').map(Number);d.setHours(h,mi,0,0)}else d.setHours(0,0,0,0);return d.getTime()}
+function mtgTs(m){
+  // Parse date locally to avoid UTC offset (BST etc)
+  const[yr,mn,dy]=m.date.split('-').map(Number);
+  const d=new Date(yr,mn-1,dy,0,0,0,0);
+  if(m.time){const[h,mi]=m.time.split(':').map(Number);d.setHours(h,mi,0,0);}
+  return d.getTime();
+}
 function nextMtg(){const now=Date.now();return S.meetings.filter(m=>!m.archived).map(m=>({m,ts:mtgTs(m)})).filter(x=>x.ts>now-60000).sort((a,b)=>a.ts-b.ts)[0]?.m||null}
 function renderUpcoming(){
   const el=document.getElementById('upContent'),n=nextMtg();
   if(!n){el.innerHTML='<span class="up-empty">No upcoming meetings</span>';return}
-  const d=new Date(n.date);
+  const[uyr,umn,udy]=n.date.split('-').map(Number);
+  const d=new Date(uyr,umn-1,udy);
   const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const du=daysUntil(n.date);
   let dayLbl;
@@ -764,8 +775,24 @@ function openNextMtgNotes(){const n=nextMtg();if(n)openMtgNotes(n.id)}
 // ── TASKS ─────────────────────────────────────────────────────
 function showAdd(key){
   document.querySelectorAll('.add-bar').forEach(e=>e.classList.remove('on'));
-  document.getElementById('add-'+key).classList.add('on');
-  document.getElementById('inp-'+key).focus();
+  const bar=document.getElementById('add-'+key);
+  bar.classList.add('on');
+  const inp=document.getElementById('inp-'+key);
+  inp.value='';
+  inp.focus();
+  // Dismiss on outside tap
+  setTimeout(()=>{
+    function outsideTap(e){
+      if(!bar.contains(e.target)){
+        bar.classList.remove('on');
+        inp.value='';
+        document.removeEventListener('touchstart',outsideTap,true);
+        document.removeEventListener('mousedown',outsideTap,true);
+      }
+    }
+    document.addEventListener('touchstart',outsideTap,true);
+    document.addEventListener('mousedown',outsideTap,true);
+  },100);
 }
 function addKey(e,mode,sec){
   if(e.key==='Enter')doAdd(mode,sec);
@@ -832,6 +859,7 @@ function renderTasks(mode,sec){
     // Wrapper for swipe
     const wrap=document.createElement('div');
     wrap.className='swipe-wrap';
+    wrap.dataset.mode=mode;wrap.dataset.sec=sec;wrap.dataset.tidx=i;
 
     // Delete bg
     const delBg=document.createElement('div');
@@ -844,11 +872,12 @@ function renderTasks(mode,sec){
     card.innerHTML=`
       <div class="dh">⣿</div>
       <div class="chk" onclick="toggleTask('${mode}','${sec}',${i})"></div>
-      <div class="task-txt" contenteditable="true"
+      <div class="task-txt"
         onblur="editTask('${mode}','${sec}',${i},this.innerText)"
         onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
       >${esc(t.text)}</div>
       ${t.date?`<span class="due-tag ${dueClass}">${fmtDue(t.date,t.time)}</span>`:''}
+      <button class="task-edit-btn" title="Edit" onclick="startEditTask(this)">✎</button>
       <button class="task-note-btn${hasNote?' has-note':''}" title="Note" onclick="toggleTaskNote('${mode}','${sec}',${i},this)">⋯</button>
       <button class="del-btn" onclick="delTask('${mode}','${sec}',${i})">✕</button>
     `;
@@ -875,14 +904,32 @@ function toggleTask(mode,sec,i){
   renderTasks(mode,sec);updateClearBtn(mode);save();
 }
 function nextRecur(iso,recur){
-  const d=new Date(iso);
+  const[yr,mn,dy]=iso.split('-').map(Number);
+  const d=new Date(yr,mn-1,dy,12,0,0,0); // noon to avoid any DST edge
   if(recur==='weekly')d.setDate(d.getDate()+7);
   else if(recur==='biweekly')d.setDate(d.getDate()+14);
   else if(recur==='monthly')d.setMonth(d.getMonth()+1);
   else if(recur==='yearly')d.setFullYear(d.getFullYear()+1);
-  return d.toISOString().split('T')[0];
+  return localISO(d.getFullYear(),d.getMonth(),d.getDate());
 }
-function editTask(mode,sec,i,text){const t=text.trim();if(!t){delTask(mode,sec,i);return}S.tasks[mode][sec][i].text=t;save()}
+function editTask(mode,sec,i,text){
+  const t=text.trim();
+  const el=document.querySelector(`[data-mode='${mode}'][data-sec='${sec}'][data-tidx='${i}'] .task-txt`);
+  if(el){el.contentEditable='false';el.classList.remove('editing');}
+  if(!t){delTask(mode,sec,i);return}
+  S.tasks[mode][sec][i].text=t;save();
+}
+function startEditTask(btn){
+  const card=btn.closest('.task-card');
+  const txt=card.querySelector('.task-txt');
+  txt.contentEditable='true';
+  txt.classList.add('editing');
+  // place cursor at end
+  txt.focus();
+  const range=document.createRange(),sel=window.getSelection();
+  range.selectNodeContents(txt);range.collapse(false);
+  sel.removeAllRanges();sel.addRange(range);
+}
 function toggleTaskNote(mode,sec,i,btn){
   const card=btn.closest('.task-card');
   const noteArea=card.parentElement.querySelector('.task-note-area');
@@ -1303,7 +1350,8 @@ function archivePast(){
   const now=Date.now();
   S.meetings.forEach(m=>{
     if(m.archived)return;
-    if(mtgTs(m)<now-3600000){if(m.recur==='once')m.archived=true;else m.date=nextRecur(m.date,m.recur)}
+    // Give 2hrs grace before archiving
+    if(mtgTs(m)<now-7200000){if(m.recur==='once')m.archived=true;else m.date=nextRecur(m.date,m.recur)}
   });
 }
 function renderMtgs(){
@@ -1318,7 +1366,9 @@ function renderMtgs(){
 }
 function mkMtgCard(m){
   const card=document.createElement('div');card.className='mtg-card'+(m.archived?' archived':'');
-  const d=new Date(m.date),days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],mos=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const[myr,mmn,mdy]=m.date.split('-').map(Number);
+  const d=new Date(myr,mmn-1,mdy);
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],mos=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const dateStr=`${days[d.getDay()]} ${d.getDate()} ${mos[d.getMonth()]}${m.time?' · '+m.time:''}`;
   const rL={once:'',weekly:'Weekly',biweekly:'Bi-weekly',monthly:'Monthly',yearly:'Yearly'};
   card.innerHTML=`
@@ -1337,20 +1387,23 @@ function openMtgNotes(id){
   const m=S.meetings.find(x=>x.id===id);if(!m)return;
   S.activeMtgId=id;
   document.getElementById('mnotesName').textContent=m.name;
-  const d=new Date(m.date),days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],mos=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  document.getElementById('mnotesMeta').textContent=`${days[d.getDay()]} ${d.getDate()} ${mos[d.getMonth()]}${m.time?' · '+m.time:''}`;
+  const[nyr,nmn,ndy]=m.date.split('-').map(Number);
+  const nd=new Date(nyr,nmn-1,ndy);
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],mos=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('mnotesMeta').textContent=`${days[nd.getDay()]} ${nd.getDate()} ${mos[nd.getMonth()]}${m.time?' · '+m.time:''}`;
   document.getElementById('mnotesBody').innerText=m.notes||'';
   applyMode('mnotes');
 }
 function saveMtgNotes(text){const m=S.meetings.find(x=>x.id===S.activeMtgId);if(m){m.notes=text.trim();save()}}
 
 function nextRecur(iso,recur){
-  const d=new Date(iso);
+  const[yr,mn,dy]=iso.split('-').map(Number);
+  const d=new Date(yr,mn-1,dy,12,0,0,0); // noon to avoid any DST edge
   if(recur==='weekly')d.setDate(d.getDate()+7);
   else if(recur==='biweekly')d.setDate(d.getDate()+14);
   else if(recur==='monthly')d.setMonth(d.getMonth()+1);
   else if(recur==='yearly')d.setFullYear(d.getFullYear()+1);
-  return d.toISOString().split('T')[0];
+  return localISO(d.getFullYear(),d.getMonth(),d.getDate());
 }
 
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
