@@ -21,7 +21,7 @@
   --overdue:#c0392b;--overdue-bg:#fdf0ee;--soon:#b07d2a;
   --r:12px;--rs:8px;--nav:68px;--t:.2s ease
 }
-html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;-webkit-user-select:none;user-select:none}
+html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 body{display:flex;flex-direction:column;height:100dvh;transition:background .3s}
 body.mode-work{background:var(--work-bg);color:var(--work-text)}
 body.mode-personal{background:var(--per-bg);color:var(--per-text)}
@@ -100,7 +100,7 @@ body.mode-personal .ibtn.plus{background:var(--per-accent);color:#fff}
 /* TASK LIST */
 .task-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-bottom:4px;scrollbar-width:none}
 .task-list::-webkit-scrollbar{display:none}
-.task-card{border-radius:var(--rs);padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:grab;transition:all var(--t);user-select:none;touch-action:none}
+.task-card{border-radius:var(--rs);padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:grab;transition:all var(--t);user-select:none;-webkit-user-select:none;touch-action:pan-y}
 .task-card:active{cursor:grabbing}
 .task-card.dragging{opacity:.4}
 body.mode-work .task-card{background:var(--work-surface);box-shadow:0 1px 3px rgba(124,111,94,.08)}
@@ -120,7 +120,7 @@ body.mode-personal .task-card.completed .chk{background:var(--per-accent);border
 .due-tag.soon{color:var(--soon)}
 body.mode-work .due-tag:not(.overdue):not(.soon){color:var(--work-muted)}
 body.mode-personal .due-tag:not(.overdue):not(.soon){color:var(--per-muted)}
-.dh{color:inherit;opacity:.2;font-size:13px;flex-shrink:0;cursor:grab}
+.dh{color:inherit;opacity:.2;font-size:13px;flex-shrink:0;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
 .del-btn{opacity:0;background:none;border:none;cursor:pointer;font-size:15px;padding:2px 4px;border-radius:4px;transition:opacity var(--t);color:inherit;flex-shrink:0}
 .task-card:hover .del-btn{opacity:.3}
 .del-btn:hover{opacity:.7!important}
@@ -251,7 +251,7 @@ body.mode-personal .task-note-inp::placeholder{color:var(--per-muted)}
 
 /* SWIPE TO DELETE */
 .swipe-wrap{position:relative;overflow:hidden;border-radius:var(--rs);flex-shrink:0}
-.swipe-del-bg{position:absolute;right:0;top:0;bottom:0;width:80px;display:flex;align-items:center;justify-content:center;background:#c0392b;color:#fff;font-size:13px;font-weight:600;letter-spacing:.04em;border-radius:var(--rs);opacity:0;transition:opacity .15s}
+.swipe-del-bg{position:absolute;left:0;top:0;bottom:0;width:80px;display:flex;align-items:center;justify-content:center;background:#c0392b;color:#fff;font-size:13px;font-weight:600;letter-spacing:.04em;border-radius:var(--rs);opacity:0;transition:opacity .15s}
 .swipe-wrap .task-card{position:relative;transition:transform .2s ease,opacity .2s}
 
 /* NOTE DRAG HANDLE */
@@ -917,82 +917,76 @@ function onDrop(e,mode,sec){
   renderTasks(mode,sec);save();
 }
 function addSwipeDelete(wrap,card,delBg,mode,sec,idx){
-  let startX=null,dx=0;
+  let startX=null,dx=0,startY=null;
   const threshold=70;
   card.addEventListener('touchstart',e=>{
     if(e.touches.length>1)return;
-    startX=e.touches[0].clientX;dx=0;
+    // Don't start swipe if touch is on drag handle
+    if(e.target.classList.contains('dh'))return;
+    startX=e.touches[0].clientX;
+    startY=e.touches[0].clientY;
+    dx=0;
   },{passive:true});
   card.addEventListener('touchmove',e=>{
     if(startX===null)return;
-    dx=e.touches[0].clientX-startX;
-    if(dx>0){dx=0;return}
-    const clamped=Math.max(dx,-threshold*1.2);
+    const curDx=e.touches[0].clientX-startX;
+    const curDy=Math.abs(e.touches[0].clientY-startY);
+    // If scrolling vertically, cancel swipe
+    if(curDy>Math.abs(curDx)&&curDy>10){startX=null;return;}
+    // Only allow rightward swipe
+    if(curDx<0){dx=0;return;}
+    dx=curDx;
+    const clamped=Math.min(dx,threshold*1.2);
     card.style.transform=`translateX(${clamped}px)`;
-    delBg.style.opacity=Math.min(1,Math.abs(clamped)/threshold).toString();
+    delBg.style.opacity=Math.min(1,clamped/threshold).toString();
     if(Math.abs(dx)>8)e.preventDefault();
   },{passive:false});
   card.addEventListener('touchend',()=>{
     if(startX===null)return;
-    if(Math.abs(dx)>=threshold){
-      card.style.transform='translateX(-100%)';
+    if(dx>=threshold){
+      card.style.transform='translateX(100%)';
       card.style.opacity='0';
       setTimeout(()=>delTask(mode,sec,idx),200);
     }else{
       card.style.transform='';delBg.style.opacity='0';
     }
-    startX=null;dx=0;
+    startX=null;startY=null;dx=0;
   },{passive:true});
 }
 function addTouchDrag(card,mode,sec,idx){
   const handle=card.querySelector('.dh');
   if(!handle)return;
-  let sy=null,moved=false,ghost=null,list=null,origTop=0;
+  let sy=null,sx=null,dragging=false;
 
   handle.addEventListener('touchstart',e=>{
-    e.stopPropagation();
-    e.preventDefault();
     sy=e.touches[0].clientY;
-    moved=false;
-    list=card.closest('.task-list');
-    const rect=card.parentElement.getBoundingClientRect();
-    origTop=rect.top;
-    // Create ghost for visual feedback
-    ghost=card.cloneNode(true);
-    ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:0.7;z-index:999;pointer-events:none;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.15);`;
-    document.body.appendChild(ghost);
-    card.style.opacity='0.3';
+    sx=e.touches[0].clientX;
+    dragging=false;
+    e.preventDefault();
+    e.stopPropagation();
   },{passive:false});
 
-  document.addEventListener('touchmove',onMove,{passive:false});
-  document.addEventListener('touchend',onEnd,{passive:true});
-
-  function onMove(e){
+  handle.addEventListener('touchmove',e=>{
     if(sy===null)return;
-    moved=true;
-    const dy=e.touches[0].clientY-sy;
-    if(ghost)ghost.style.top=(origTop+dy)+'px';
-    e.preventDefault();
-  }
+    const dy=Math.abs(e.touches[0].clientY-sy);
+    const dx=Math.abs(e.touches[0].clientX-sx);
+    if(dy>8&&dy>dx)dragging=true;
+    if(dragging)e.preventDefault();
+  },{passive:false});
 
-  function onEnd(e){
-    if(sy===null)return;
-    document.removeEventListener('touchmove',onMove);
-    document.removeEventListener('touchend',onEnd);
-    if(ghost){ghost.remove();ghost=null;}
-    card.style.opacity='';
-    if(!moved){sy=null;return;}
+  handle.addEventListener('touchend',e=>{
+    if(sy===null){return;}
     const diff=e.changedTouches[0].clientY-sy;
-    sy=null;
-    if(Math.abs(diff)<20)return;
+    sy=null;sx=null;
+    if(!dragging||Math.abs(diff)<30)return;
+    dragging=false;
     const arr=S.tasks[mode][sec];
-    const steps=Math.round(diff/60);
-    if(steps===0)return;
+    const steps=diff>0?1:-1;
     const ni=Math.max(0,Math.min(arr.length-1,idx+steps));
     if(ni===idx)return;
     const[item]=arr.splice(idx,1);arr.splice(ni,0,item);
     renderTasks(mode,sec);save();
-  }
+  },{passive:true});
 }
 
 // ── TASK DATE MODAL ──────────────────────────────────────────
