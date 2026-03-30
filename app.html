@@ -178,8 +178,6 @@ body.mode-personal .add-ok{background:var(--per-accent)}
 .mtg-meta{font-size:12px;color:var(--work-muted);margin-top:2px}
 .recur-tag{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--work-soft);color:var(--work-accent);flex-shrink:0}
 
-.mtg-edit-btn{opacity:.4;background:var(--work-soft);border:none;cursor:pointer;font-size:13px;font-weight:500;color:var(--work-accent);padding:4px 9px;border-radius:var(--rs);transition:opacity var(--t);flex-shrink:0;font-family:'DM Sans',sans-serif}
-.mtg-edit-btn:hover{opacity:1}
 .mtg-del{opacity:0;background:none;border:none;cursor:pointer;font-size:15px;color:var(--work-muted);padding:2px 6px;transition:opacity var(--t);flex-shrink:0}
 .mtg-card:hover .mtg-del{opacity:.35}
 .mtg-del:hover{opacity:.8!important}
@@ -553,7 +551,10 @@ window.save=function(){
   <!-- MEETING NOTES VIEW -->
   <div class="mnotes-view" id="mnotesView">
     <div class="mnotes-hdr">
-      <div class="mnotes-name" id="mnotesName"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+        <div class="mnotes-name" id="mnotesName"></div>
+        <button class="hdr-btn back-btn" style="display:block;margin-left:8px;flex-shrink:0" onclick="openMtgModal(window._activeMtgId)">Edit</button>
+      </div>
       <div class="mnotes-meta" id="mnotesMeta"></div>
     </div>
     <div class="mnotes-body" id="mnotesBody" contenteditable="true" onblur="saveMtgNotes(this.innerText)"></div>
@@ -1376,7 +1377,6 @@ function mkMtgCard(m){
       <div class="mtg-meta">${dateStr}</div>
     </div>
     ${m.recur!=='once'?`<span class="recur-tag">${rL[m.recur]}</span>`:''}
-    ${!m.archived?`<button class="mtg-edit-btn" onclick="event.stopPropagation();openMtgModal(${m.id})">✎</button>`:''}
     <button class="mtg-del" onclick="event.stopPropagation();delMtg(${m.id})">✕</button>`;
   card.addEventListener('click',()=>openMtgNotes(m.id));
   return card;
@@ -1384,7 +1384,7 @@ function mkMtgCard(m){
 function delMtg(id){const i=S.meetings.findIndex(m=>m.id===id);if(i===-1)return;S.meetings.splice(i,1);renderMtgs();renderUpcoming();save()}
 function openMtgNotes(id){
   const m=S.meetings.find(x=>x.id===id);if(!m)return;
-  S.activeMtgId=id;
+  S.activeMtgId=id;window._activeMtgId=id;
   document.getElementById('mnotesName').textContent=m.name;
   const[nyr,nmn,ndy]=m.date.split('-').map(Number);
   const nd=new Date(nyr,nmn-1,ndy);
