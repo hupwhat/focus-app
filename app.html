@@ -52,6 +52,10 @@ body.mode-personal .mode-lbl,body.mode-archive-per .mode-lbl{color:var(--per-mut
 body.mode-notes .mode-lbl{color:var(--note-muted)}
 .hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
 .hdr-btn{border:none;border-radius:var(--rs);padding:4px 11px;font-size:12px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all var(--t)}
+
+.flip-btn{background:none;border:none;cursor:pointer;font-size:20px;padding:2px 6px;opacity:.3;transition:opacity var(--t);color:inherit;line-height:1}
+.flip-btn:active{opacity:.8}
+#mainApp.flipped{transform:rotate(180deg);transform-origin:center center;}
 .arc-hdr-btn{display:none}
 body.mode-work .arc-hdr-btn{display:block;background:var(--work-soft);color:var(--work-accent)}
 body.mode-personal .arc-hdr-btn{display:block;background:var(--per-soft);color:var(--per-accent)}
@@ -71,6 +75,11 @@ body.mode-personal .user-dot{background:var(--per-accent)}
 /* UPCOMING */
 .upcoming{margin:0 16px 10px;background:var(--work-surface);border-radius:var(--rs);box-shadow:0 1px 4px rgba(124,111,94,.1);display:flex;align-items:center;padding:10px 14px;gap:10px;flex-shrink:0;cursor:pointer;min-height:44px;transition:all var(--t)}
 .upcoming:active{opacity:.8}
+.upcoming.meeting-soon{background:#c0392b;box-shadow:0 1px 4px rgba(192,57,43,.3);}
+.upcoming.meeting-soon .up-time{color:rgba(255,255,255,0.75);}
+.upcoming.meeting-soon .up-name{color:#fff;}
+.upcoming.meeting-soon .mtgs-btn{background:rgba(0,0,0,0.2);color:#fff;}
+
 .up-content{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
 .up-name{font-size:14px;font-weight:500;color:var(--work-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .up-time{font-size:13px;color:var(--work-muted);flex-shrink:0}
@@ -368,7 +377,7 @@ window.save=function(){
     <div class="hdr-right">
       <button class="hdr-btn arc-hdr-btn" onclick="goArchive()">Archive</button>
       <button class="hdr-btn back-btn" onclick="goBack()">← Back</button>
-      <button class="user-pill" id="signOutBtn" title="Sign out"><div class="user-dot"></div></button>
+      <button class="flip-btn" id="flipBtn" onclick="flipScreen()" title="Flip screen">⇅</button>
     </div>
   </div>
 </div>
@@ -809,8 +818,12 @@ function renderTasks(mode,sec){
   var tasks=S.tasks[mode][sec];
   emptyEl.style.display=tasks.length?'none':'flex';
   var nowD=new Date();nowD.setHours(0,0,0,0);
+  // Sort: incomplete first, completed sink to bottom (preserve relative order)
+  var incomplete=tasks.filter(function(t){return!t.completed;});
+  var completed=tasks.filter(function(t){return t.completed;});
+  var sorted=incomplete.concat(completed);
 
-  for(var i=0;i<tasks.length;i++){
+  for(var i=0;i<sorted.length;i++){
     (function(t,i){
       var overdue=!!(t.date&&!t.completed&&new Date(t.date)<nowD);
       var du=t.date?daysUntil(t.date):999;
@@ -867,7 +880,7 @@ function renderTasks(mode,sec){
       wrap.appendChild(card);
       wrap.appendChild(noteArea);
       list.appendChild(wrap);
-    })(tasks[i],i);
+    })(sorted[i],i);
   }
   updateClearBtn(mode);
 }
@@ -1154,17 +1167,54 @@ function openMtgNotes(id){
 }
 function saveMtgNotes(text){var m=S.meetings.find(function(x){return x.id===S.activeMtgId;});if(m){m.notes=text.trim();save();}}
 
+// ── AUTO ARCHIVE ─────────────────────────────────────────────
+function autoArchiveCompleted(){
+  var today=localISO(new Date().getFullYear(),new Date().getMonth(),new Date().getDate());
+  var changed=false;
+  ['work','personal'].forEach(function(mode){
+    ['priority','general'].forEach(function(sec){
+      var keep=[],done=[];
+      S.tasks[mode][sec].forEach(function(t){(t.completed?done:keep).push(t);});
+      if(done.length){
+        S.tasks[mode][sec]=keep;
+        done.forEach(function(t){S.archive[mode].unshift({id:t.id,text:t.text,completedDate:today});});
+        changed=true;
+      }
+    });
+  });
+  if(changed){renderAll();save();}
+}
+function scheduleMidnightArchive(){
+  var now=new Date();
+  var midnight=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,10,0);
+  var ms=midnight-now;
+  setTimeout(function(){
+    autoArchiveCompleted();
+    scheduleMidnightArchive(); // reschedule for next midnight
+  },ms);
+}
+
+// ── FLIP SCREEN ──────────────────────────────────────────────
+function flipScreen(){
+  var app=document.getElementById('mainApp');
+  app.classList.toggle('flipped');
+  localStorage.setItem('focus-flipped',app.classList.contains('flipped')?'1':'0');
+}
+
 // ── INIT ─────────────────────────────────────────────────────
-load();archivePast();initMode();renderAll();
-setInterval(function(){archivePast();renderUpcoming();},60000);
+load();archivePast();autoArchiveCompleted();initMode();renderAll();
+// Restore flip state
+if(localStorage.getItem('focus-flipped')==='1')document.getElementById('mainApp').classList.add('flipped');
+// Schedule midnight auto-archive
+scheduleMidnightArchive();
+setInterval(function(){archivePast();renderUpcoming();},30000);
 </script>
 
 <script>
 document.addEventListener('DOMContentLoaded',function(){
   var btn=document.getElementById('googleSignInBtn');
   if(btn)btn.addEventListener('click',function(){if(typeof window.signInWithGoogle==='function')window.signInWithGoogle();});
-  var out=document.getElementById('signOutBtn');
-  if(out)out.addEventListener('click',function(){if(typeof window.doSignOut==='function')window.doSignOut();});
+
 });
 </script>
 
