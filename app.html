@@ -855,7 +855,13 @@ function clearCompleted(mode){
 function renderTasks(mode,sec){
   const list=document.getElementById('tl-'+mode+'-'+sec);
   const empty=document.getElementById('em-'+mode+'-'+sec);
-  Array.from(list.children).forEach(c=>{if(!c.classList.contains('empty'))c.remove();});
+  // Clear all task wrappers safely
+  let child=list.firstChild;
+  while(child){
+    const next=child.nextSibling;
+    if(!child.classList||!child.classList.contains('empty'))child.remove();
+    child=next;
+  }
   const tasks=S.tasks[mode][sec];
   empty.style.display=tasks.length?'none':'flex';
   const now=new Date();now.setHours(0,0,0,0);
