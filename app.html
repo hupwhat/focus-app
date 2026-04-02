@@ -122,8 +122,10 @@ body.mode-work .task-card{background:var(--work-surface);box-shadow:0 1px 3px rg
 body.mode-personal .task-card{background:var(--per-surface);box-shadow:0 1px 3px rgba(45,106,159,.08)}
 .task-card.overdue{background:var(--overdue-bg)!important}
 .task-card.completed .task-txt{text-decoration:line-through;opacity:.45}
-.drag-handle{color:inherit;opacity:.2;font-size:14px;flex-shrink:0;cursor:grab;padding:2px 4px;touch-action:none;-webkit-user-select:none;user-select:none}
+.drag-handle{color:inherit;opacity:.2;font-size:14px;flex-shrink:0;cursor:grab;padding:6px 6px;touch-action:none;-webkit-user-select:none;user-select:none;min-width:28px;text-align:center}
 .drag-handle:active{opacity:.6;cursor:grabbing}
+.task-list.sorting{overflow:hidden;pointer-events:none}
+.task-list.sorting .task-wrap{pointer-events:auto}
 .task-card.sortable-ghost{opacity:.35;}
 .task-card.sortable-drag{opacity:.9;box-shadow:0 4px 16px rgba(0,0,0,.15);}
 .chk{width:20px;height:20px;border-radius:50%;border:2px solid;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t)}
@@ -901,7 +903,15 @@ function renderTasks(mode,sec){
       dragClass:'sortable-drag',
       draggable:'.task-wrap',
       filter:'.empty',
+      forceFallback:true,
+      fallbackTolerance:5,
+      fallbackOnBody:true,
+      touchStartThreshold:3,
+      delay:0,
+      delayOnTouchOnly:false,
+      onStart:function(){list.classList.add('sorting');},
       onEnd:function(){
+        list.classList.remove('sorting');
         var newOrder=[];
         var wraps=list.querySelectorAll('.task-wrap');
         for(var i=0;i<wraps.length;i++){
@@ -911,7 +921,6 @@ function renderTasks(mode,sec){
         }
         S.tasks[mode][sec]=newOrder;
         save();
-        renderTasks(mode,sec);
       }
     });
   }
