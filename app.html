@@ -122,9 +122,10 @@ body.mode-work .task-card{background:var(--work-surface);box-shadow:0 1px 3px rg
 body.mode-personal .task-card{background:var(--per-surface);box-shadow:0 1px 3px rgba(45,106,159,.08)}
 .task-card.overdue{background:var(--overdue-bg)!important}
 .task-card.completed .task-txt{text-decoration:line-through;opacity:.45}
-.move-btns{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
-.move-btn{background:none;border:none;cursor:pointer;font-size:11px;line-height:1;padding:1px 4px;opacity:.25;color:inherit;transition:opacity var(--t);-webkit-user-select:none;user-select:none}
-.move-btn:active{opacity:1}
+.drag-handle{color:inherit;opacity:.2;font-size:14px;flex-shrink:0;cursor:grab;padding:2px 4px;touch-action:none;-webkit-user-select:none;user-select:none}
+.drag-handle:active{opacity:.6;cursor:grabbing}
+.task-card.sortable-ghost{opacity:.35;}
+.task-card.sortable-drag{opacity:.9;box-shadow:0 4px 16px rgba(0,0,0,.15);}
 .chk{width:20px;height:20px;border-radius:50%;border:2px solid;flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t)}
 body.mode-work .chk{border-color:var(--work-accent)}
 body.mode-personal .chk{border-color:var(--per-accent)}
@@ -756,17 +757,40 @@ function doAdd(mode,sec){
   inp.value='';document.getElementById('add-'+mode+'-'+sec).classList.remove('on');
   renderTasks(mode,sec);save();
 }
-function moveTask(mode,sec,idx,dir){
-  var arr=S.tasks[mode][sec],ni=idx+dir;
-  if(ni<0||ni>=arr.length)return;
-  var item=arr.splice(idx,1)[0];arr.splice(ni,0,item);
-  renderTasks(mode,sec);save();
-}
+
 function toggleTask(mode,sec,i){
   var t=S.tasks[mode][sec][i];
   t.completed=!t.completed;
   if(t.completed&&t.recur!=='once'&&t.date){t.date=nextRecur(t.date,t.recur);t.completed=false;}
   renderTasks(mode,sec);updateClearBtn(mode);save();
+}
+function toggleTaskById(mode,sec,id){
+  var t=S.tasks[mode][sec].find(function(x){return x.id===id;});
+  if(!t)return;
+  t.completed=!t.completed;
+  if(t.completed&&t.recur!=='once'&&t.date){t.date=nextRecur(t.date,t.recur);t.completed=false;}
+  renderTasks(mode,sec);updateClearBtn(mode);save();
+}
+function delTaskById(mode,sec,id){
+  S.tasks[mode][sec]=S.tasks[mode][sec].filter(function(t){return t.id!==id;});
+  renderTasks(mode,sec);save();
+}
+function editTaskById(mode,sec,id,text){
+  var t=text.trim();
+  if(!t){delTaskById(mode,sec,id);return;}
+  var task=S.tasks[mode][sec].find(function(x){return x.id===id;});
+  if(task)task.text=t;
+  save();
+}
+function toggleTaskNoteById(mode,sec,id,btn){
+  var noteArea=btn.closest('.task-card').parentElement.querySelector('.task-note-area');
+  var open=noteArea.classList.toggle('open');
+  if(open)noteArea.querySelector('textarea').focus();
+}
+function saveTaskNoteById(mode,sec,id,val){
+  var task=S.tasks[mode][sec].find(function(x){return x.id===id;});
+  if(task)task.note=val;
+  save();
 }
 function startEditTask(btn){
   var txt=btn.closest('.task-card').querySelector('.task-txt');
@@ -781,7 +805,7 @@ function editTask(mode,sec,i,text){
   if(!t){delTask(mode,sec,i);return;}
   S.tasks[mode][sec][i].text=t;save();
 }
-function toggleTaskNote(mode,sec,i,btn){
+function toggleTaskNote(mode,sec,idOrIdx,btn){
   var noteArea=btn.closest('.task-card').parentElement.querySelector('.task-note-area');
   var open=noteArea.classList.toggle('open');
   if(open)noteArea.querySelector('textarea').focus();
@@ -1210,6 +1234,7 @@ scheduleMidnightArchive();
 setInterval(function(){archivePast();renderUpcoming();},30000);
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded',function(){
   var btn=document.getElementById('googleSignInBtn');
