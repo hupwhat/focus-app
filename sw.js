@@ -1,10 +1,9 @@
-const CACHE='focus-v1';
+const CACHE='focus-v3';
 const ASSETS=[
   '/focus-app/app.html',
   '/focus-app/manifest.json',
   '/focus-app/icon-192.png',
-  '/focus-app/icon-512.png',
-  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap'
+  '/focus-app/icon-512.png'
 ];
 
 self.addEventListener('install',e=>{
@@ -22,8 +21,7 @@ self.addEventListener('activate',e=>{
 });
 
 self.addEventListener('fetch',e=>{
-  // Network first for Firebase, cache first for everything else
-  if(e.request.url.includes('firebase')||e.request.url.includes('googleapis.com/identitytoolkit')||e.request.url.includes('firestore')){
+  if(e.request.url.includes('firebase')||e.request.url.includes('googleapis')||e.request.url.includes('gstatic')||e.request.url.includes('cdnjs')){
     e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));
     return;
   }
@@ -31,7 +29,7 @@ self.addEventListener('fetch',e=>{
     caches.match(e.request).then(cached=>{
       if(cached)return cached;
       return fetch(e.request).then(resp=>{
-        if(resp&&resp.status===200&&resp.type!=='opaque'){
+        if(resp&&resp.status===200){
           const clone=resp.clone();
           caches.open(CACHE).then(c=>c.put(e.request,clone));
         }
