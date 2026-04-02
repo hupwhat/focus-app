@@ -760,6 +760,7 @@ function doAdd(mode,sec){
 
 function toggleTask(mode,sec,i){
   var t=S.tasks[mode][sec][i];
+  if(!t)return;
   t.completed=!t.completed;
   if(t.completed&&t.recur!=='once'&&t.date){t.date=nextRecur(t.date,t.recur);t.completed=false;}
   renderTasks(mode,sec);updateClearBtn(mode);save();
@@ -776,16 +777,11 @@ function delTaskById(mode,sec,id){
   renderTasks(mode,sec);save();
 }
 function editTaskById(mode,sec,id,text){
-  var t=text.trim();
-  if(!t){delTaskById(mode,sec,id);return;}
+  var trimmed=text.trim();
+  if(!trimmed){delTaskById(mode,sec,id);return;}
   var task=S.tasks[mode][sec].find(function(x){return x.id===id;});
-  if(task)task.text=t;
+  if(task)task.text=trimmed;
   save();
-}
-function toggleTaskNoteById(mode,sec,id,btn){
-  var noteArea=btn.closest('.task-card').parentElement.querySelector('.task-note-area');
-  var open=noteArea.classList.toggle('open');
-  if(open)noteArea.querySelector('textarea').focus();
 }
 function saveTaskNoteById(mode,sec,id,val){
   var task=S.tasks[mode][sec].find(function(x){return x.id===id;});
@@ -847,64 +843,77 @@ function renderTasks(mode,sec){
   var completed=tasks.filter(function(t){return t.completed;});
   var sorted=incomplete.concat(completed);
 
-  for(var i=0;i<sorted.length;i++){
-    (function(t,i){
+  for(var si=0;si<sorted.length;si++){
+    (function(t){
       var overdue=!!(t.date&&!t.completed&&new Date(t.date)<nowD);
       var du=t.date?daysUntil(t.date):999;
       var dueClass=overdue?'overdue':(du<=3&&du>=0?'soon':'');
       var hasNote=!!(t.note&&t.note.trim());
-      var isFirst=(i===0),isLast=(i===tasks.length-1);
 
       var wrap=document.createElement('div');
       wrap.className='task-wrap';
-      wrap.setAttribute('data-mode',mode);
-      wrap.setAttribute('data-sec',sec);
-      wrap.setAttribute('data-tidx',String(i));
+      wrap.dataset.id=String(t.id);
 
       var card=document.createElement('div');
       card.className='task-card'+(t.completed?' completed':'')+(overdue?' overdue':'');
 
-      // Build inner HTML safely
-      var upDisabled=isFirst?' style="opacity:0;pointer-events:none"':'';
-      var dnDisabled=isLast?' style="opacity:0;pointer-events:none"':'';
       var dueHtml=t.date?'<span class="due-tag '+dueClass+'">'+fmtDue(t.date,t.time)+'</span>':'';
       card.innerHTML=
-        '<div class="move-btns">'
-          +'<button class="move-btn"'+upDisabled+'>▲</button>'
-          +'<button class="move-btn"'+dnDisabled+'>▼</button>'
-        +'</div>'
+        '<div class="drag-handle">&#8942;&#8942;</div>'
         +'<div class="chk"></div>'
         +'<div class="task-txt">'+esc(t.text)+'</div>'
         +dueHtml
-        +'<button class="task-edit-btn" title="Edit">✎</button>'
-        +'<button class="task-note-btn'+(hasNote?' has-note':'')+'" title="Note">⋯</button>'
-        +'<button class="del-btn">✕</button>';
+        +'<button class="task-edit-btn" title="Edit">&#9998;</button>'
+        +'<button class="task-note-btn'+(hasNote?' has-note':'')+'" title="Note">&#8943;</button>'
+        +'<button class="del-btn">&#10005;</button>';
 
-      // Attach events
-      var btns=card.querySelectorAll('.move-btn');
-      (function(upB,dnB){
-        upB.addEventListener('click',function(){moveTask(mode,sec,i,-1);});
-        dnB.addEventListener('click',function(){moveTask(mode,sec,i,1);});
-      })(btns[0],btns[1]);
-      card.querySelector('.chk').addEventListener('click',function(){toggleTask(mode,sec,i);});
-      card.querySelector('.task-edit-btn').addEventListener('click',function(){startEditTask(this);});
-      card.querySelector('.task-note-btn').addEventListener('click',function(){toggleTaskNote(mode,sec,i,this);});
-      card.querySelector('.del-btn').addEventListener('click',function(){delTask(mode,sec,i);});
-      var txtEl=card.querySelector('.task-txt');
-      txtEl.addEventListener('blur',function(){editTask(mode,sec,i,this.innerText);});
-      txtEl.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();this.blur();}});
+      // Use task ID for all operations — immune to index shifting
+      (function(tid){
+        card.querySelector('.chk').addEventListener('click',function(){toggleTaskById(mode,sec,tid);});
+        card.querySelector('.task-edit-btn').addEventListener('click',function(){startEditTask(this);});
+        card.querySelector('.task-note-btn').addEventListener('click',function(){toggleTaskNote(mode,sec,tid,this);});
+        card.querySelector('.del-btn').addEventListener('click',function(){delTaskById(mode,sec,tid);});
+        var txtEl=card.querySelector('.task-txt');
+        txtEl.addEventListener('blur',function(){editTaskById(mode,sec,tid,this.innerText);});
+        txtEl.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();this.blur();}});
+      })(t.id);
 
       var noteArea=document.createElement('div');
       noteArea.className='task-note-area'+(hasNote?' open':'');
       var ta=document.createElement('textarea');
       ta.className='task-note-inp';ta.rows=2;ta.placeholder='Add a note\u2026';ta.value=t.note||'';
-      (function(mode,sec,i){ta.addEventListener('blur',function(){saveTaskNote(mode,sec,i,this.value);});})(mode,sec,i);
+      (function(tid){ta.addEventListener('blur',function(){saveTaskNoteById(mode,sec,tid,this.value);});})(t.id);
       noteArea.appendChild(ta);
 
       wrap.appendChild(card);
       wrap.appendChild(noteArea);
       list.appendChild(wrap);
-    })(sorted[i],i);
+    })(sorted[si]);
+  }
+
+  // Init SortableJS
+  if(typeof Sortable!=='undefined'){
+    if(list._sortable)list._sortable.destroy();
+    list._sortable=Sortable.create(list,{
+      handle:'.drag-handle',
+      animation:150,
+      ghostClass:'sortable-ghost',
+      dragClass:'sortable-drag',
+      draggable:'.task-wrap',
+      filter:'.empty',
+      onEnd:function(){
+        var newOrder=[];
+        var wraps=list.querySelectorAll('.task-wrap');
+        for(var i=0;i<wraps.length;i++){
+          var tid=parseInt(wraps[i].dataset.id);
+          var task=S.tasks[mode][sec].find(function(t){return t.id===tid;});
+          if(task)newOrder.push(task);
+        }
+        S.tasks[mode][sec]=newOrder;
+        save();
+        renderTasks(mode,sec);
+      }
+    });
   }
   updateClearBtn(mode);
 }
