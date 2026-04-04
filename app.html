@@ -93,6 +93,7 @@ body.mode-notes .user-dot,body.mode-ndetail .user-dot{background:var(--note-acce
 .flex-col{display:flex;flex-direction:column;flex:1;min-width:0}
 
 /* ── ACCOUNT SCREEN ── */
+body.mode-search{background:var(--work-bg);color:var(--work-text)}
 body.mode-account{background:var(--work-bg);color:var(--work-text)}
 .account-view{display:none;flex-direction:column;height:100%;overflow-y:auto;padding:0 16px 24px;scrollbar-width:none}
 .account-view::-webkit-scrollbar{display:none}
@@ -380,6 +381,7 @@ body.mode-work .nav,body.mode-meetings .nav,body.mode-mnotes .nav,body.mode-arch
 body.mode-personal .nav,body.mode-archive-per .nav{background:var(--per-bg)}
 body.mode-notes .nav,body.mode-ndetail .nav{background:var(--note-bg)}
 body.mode-account .nav{background:var(--work-bg)}
+body.mode-search .nav{background:var(--work-bg)}
 .nav-btn{flex:1;border:none;border-radius:var(--rs);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;letter-spacing:.03em;cursor:pointer;transition:all var(--t);display:flex;align-items:center;justify-content:center}
 .nav-btn:active{transform:scale(.97)}
 
@@ -404,7 +406,35 @@ body.dark.mode-ndetail .nb-notes{background:var(--note-muted);color:var(--note-b
 body.mode-personal .nb-per,
 body.mode-archive-per .nb-per{background:var(--per-accent);color:#fff}
 
-/* TOAST */
+.search-btn{background:none;border:none;cursor:pointer;font-size:18px;padding:2px 6px;opacity:.4;transition:opacity var(--t);color:inherit;line-height:1}
+.search-btn:active{opacity:.9}
+
+/* SEARCH SCREEN */
+.search-view{display:none;flex-direction:column;height:100%;padding:0 16px}
+.search-view.active{display:flex}
+.search-bar{display:flex;align-items:center;gap:8px;padding:4px 4px 12px;flex-shrink:0}
+.search-inp{flex:1;border:none;border-bottom:2px solid var(--work-accent);background:transparent;font-family:'DM Sans',sans-serif;font-size:16px;padding:6px 0;outline:none;color:var(--work-text)}
+.search-inp::placeholder{color:var(--work-muted)}
+.search-clear{background:none;border:none;cursor:pointer;font-size:18px;color:var(--work-muted);padding:2px 4px;opacity:0;pointer-events:none;transition:opacity var(--t);flex-shrink:0;line-height:1}
+.search-clear.visible{opacity:.5;pointer-events:auto}
+.search-clear.visible:active{opacity:1}
+.search-filters{display:flex;gap:6px;flex-shrink:0;margin-bottom:12px}
+.search-filter{flex:1;padding:7px 0;border:1.5px solid var(--work-div);border-radius:var(--rs);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;cursor:pointer;transition:all var(--t);background:transparent;color:var(--work-muted);letter-spacing:.03em}
+.search-filter.sel{border-color:var(--work-accent);background:var(--work-accent);color:#fff}
+.search-filter:active{transform:scale(.97)}
+.search-results{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-bottom:8px;scrollbar-width:none}
+.search-results::-webkit-scrollbar{display:none}
+.search-empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;opacity:.3;font-size:13px;text-align:center}
+.search-empty-ico{font-size:28px}
+.search-group-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--work-muted);padding:8px 2px 4px;flex-shrink:0}
+.search-result{background:var(--work-surface);border-radius:var(--rs);padding:11px 14px;display:flex;align-items:flex-start;gap:10px;cursor:pointer;transition:all var(--t);box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.search-result:active{opacity:.7}
+.search-result-icon{font-size:14px;flex-shrink:0;margin-top:1px;opacity:.5}
+.search-result-body{flex:1;min-width:0}
+.search-result-title{font-size:14px;font-weight:500;color:var(--work-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-result-title mark{background:none;color:var(--work-accent);font-weight:700}
+.search-result-sub{font-size:12px;color:var(--work-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-result-sub mark{background:none;color:var(--work-accent);font-weight:600}
 .toast{position:fixed;bottom:calc(var(--nav) + 12px);left:50%;transform:translateX(-50%) translateY(8px);background:#1a1a18;color:#fff;font-size:13px;font-weight:500;padding:8px 16px;border-radius:20px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:300;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:flex-end;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -535,6 +565,7 @@ window.save=function(){
     <div class="hdr-right">
       <button class="hdr-btn arc-hdr-btn" onclick="goArchive()">Archive</button>
       <button class="hdr-btn back-btn" onclick="goBack()">← Back</button>
+      <button class="search-btn" onclick="openSearch()" title="Search">🔍</button>
       <button class="flip-btn" id="flipBtn" onclick="flipScreen()" title="Flip screen">⇅</button>
       <button class="user-pill" id="userPill" onclick="switchMode('account')" title="Account">
         <span class="user-dot"></span>
@@ -686,6 +717,25 @@ window.save=function(){
       <button class="arc-grp-btn" data-g="month" onclick="selArcGroup(this,'personal')">Month</button>
     </div>
     <div class="arc-list" id="arcPerList"></div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="search-view" id="searchView">
+    <div class="search-bar">
+      <input class="search-inp" id="searchInp" type="search" placeholder="Search everything…"
+        oninput="onSearchInput(this.value)"
+        onkeydown="if(event.key==='Escape')goBack()">
+      <button class="search-clear" id="searchClear" onclick="clearSearch()" title="Clear">✕</button>
+    </div>
+    <div class="search-filters">
+      <button class="search-filter sel" data-f="all"      onclick="setSearchFilter('all')">All</button>
+      <button class="search-filter"     data-f="tasks"    onclick="setSearchFilter('tasks')">Tasks</button>
+      <button class="search-filter"     data-f="notes"    onclick="setSearchFilter('notes')">Notes</button>
+      <button class="search-filter"     data-f="meetings" onclick="setSearchFilter('meetings')">Meetings</button>
+    </div>
+    <div class="search-results" id="searchResults">
+      <div class="search-empty"><div class="search-empty-ico">🔍</div>Start typing to search</div>
+    </div>
   </div>
 
   <!-- ACCOUNT -->
@@ -1006,6 +1056,7 @@ function goArchive(){applyMode(S.prevTaskMode==='personal'?'archive-per':'archiv
 function goBack(){
   if(S.currentMode==='mnotes')applyMode('meetings');
   else if(S.currentMode==='ndetail')doneNote();
+  else if(S.currentMode==='search')applyMode(S.prevTaskMode);
   else applyMode(S.prevTaskMode);
 }
 function applyMode(m){
@@ -1017,9 +1068,9 @@ function applyMode(m){
   });
   classes.push('mode-'+m);
   document.body.className=classes.join(' ');
-  var labels={work:'Work',personal:'Personal',notes:'Notes',ndetail:'Note',meetings:'Meetings',mnotes:'Meeting Notes',archive:'Archive','archive-per':'Archive',account:'Account'};
+  var labels={work:'Work',personal:'Personal',notes:'Notes',ndetail:'Note',meetings:'Meetings',mnotes:'Meeting Notes',archive:'Archive','archive-per':'Archive',account:'Account',search:'Search'};
   document.getElementById('modeLbl').textContent=labels[m]||m;
-  var views={work:'workView',personal:'personalView',notes:'notesView',ndetail:'ndetailView',meetings:'meetingsView',mnotes:'mnotesView',archive:'archiveView','archive-per':'archivePerView',account:'accountView'};
+  var views={work:'workView',personal:'personalView',notes:'notesView',ndetail:'ndetailView',meetings:'meetingsView',mnotes:'mnotesView',archive:'archiveView','archive-per':'archivePerView',account:'accountView',search:'searchView'};
   var keys=Object.keys(views);
   for(var i=0;i<keys.length;i++){
     var el=document.getElementById(views[keys[i]]);
@@ -1027,6 +1078,8 @@ function applyMode(m){
   }
   document.getElementById('notesView').classList.toggle('active',m==='notes');
   document.getElementById('ndetailView').classList.toggle('active',m==='ndetail');
+  document.getElementById('searchView').classList.toggle('active',m==='search');
+  if(m==='search')setTimeout(function(){document.getElementById('searchInp').focus();},80);
   if(m==='work')renderUpcoming();
   if(m==='meetings')renderMtgs();
   if(m==='archive')renderArchive('work');
@@ -1702,6 +1755,169 @@ function scheduleMidnightArchive(){
     autoArchiveCompleted();
     scheduleMidnightArchive(); // reschedule for next midnight
   },ms);
+}
+
+// ── SEARCH ───────────────────────────────────────────────────
+var _searchFilters=['all'];
+function openSearch(){
+  applyMode('search');
+  _searchFilters=['all'];
+  updateSearchFilterBtns();
+  renderSearchResults('');
+}
+function clearSearch(){
+  var inp=document.getElementById('searchInp');
+  inp.value='';
+  document.getElementById('searchClear').classList.remove('visible');
+  renderSearchResults('');
+  inp.focus();
+}
+function onSearchInput(val){
+  document.getElementById('searchClear').classList.toggle('visible',val.length>0);
+  renderSearchResults(val);
+}
+function setSearchFilter(f){
+  if(f==='all'){
+    _searchFilters=['all'];
+  }else{
+    _searchFilters=_searchFilters.filter(function(x){return x!=='all';});
+    var idx=_searchFilters.indexOf(f);
+    if(idx===-1)_searchFilters.push(f);
+    else _searchFilters.splice(idx,1);
+    if(_searchFilters.length===0)_searchFilters=['all'];
+  }
+  updateSearchFilterBtns();
+  renderSearchResults(document.getElementById('searchInp').value);
+}
+function updateSearchFilterBtns(){
+  document.querySelectorAll('.search-filter').forEach(function(btn){
+    btn.classList.toggle('sel',_searchFilters.indexOf(btn.dataset.f)!==-1);
+  });
+}
+function highlight(text,query){
+  if(!query)return esc(text);
+  var escaped=esc(text);
+  var escapedQ=query.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return escaped.replace(new RegExp('('+escapedQ+')','gi'),'<mark>$1</mark>');
+}
+function doesMatch(text,query){
+  return text&&text.toLowerCase().indexOf(query.toLowerCase())!==-1;
+}
+function renderSearchResults(query){
+  var list=document.getElementById('searchResults');
+  list.innerHTML='';
+  var q=query.trim();
+  var showAll=_searchFilters.indexOf('all')!==-1;
+  var showTasks=showAll||_searchFilters.indexOf('tasks')!==-1;
+  var showNotes=showAll||_searchFilters.indexOf('notes')!==-1;
+  var showMtgs=showAll||_searchFilters.indexOf('meetings')!==-1;
+  var rL={once:'',weekly:'Weekly',biweekly:'Bi-weekly',monthly:'Monthly',yearly:'Yearly'};
+  var MOS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  if(!q){
+    list.innerHTML='<div class="search-empty"><div class="search-empty-ico">🔍</div>Start typing to search</div>';
+    return;
+  }
+
+  var totalCount=0;
+
+  // ── TASKS ──
+  if(showTasks){
+    var taskHits=[];
+    ['work','personal'].forEach(function(mode){
+      ['priority','general'].forEach(function(sec){
+        S.tasks[mode][sec].forEach(function(t){
+          if(doesMatch(t.text,q)||doesMatch(t.note,q)){
+            taskHits.push({t:t,mode:mode,sec:sec});
+          }
+        });
+      });
+    });
+    if(taskHits.length){
+      var lbl=document.createElement('div');lbl.className='search-group-label';lbl.textContent='Tasks';list.appendChild(lbl);
+      taskHits.forEach(function(hit){
+        var t=hit.t;
+        var sub=[];
+        if(hit.mode==='work')sub.push('Work · '+(hit.sec==='priority'?'Priority':'General'));
+        else sub.push('Personal · '+(hit.sec==='priority'?'Priority':'General'));
+        if(t.date)sub.push(fmtDue(t.date,t.time));
+        if(t.recur&&t.recur!=='once')sub.push(rL[t.recur]);
+        if(t.note&&t.note.trim()&&doesMatch(t.note,q))sub.push('"'+t.note.trim().slice(0,60)+(t.note.length>60?'…':'')+'"');
+        var row=document.createElement('div');row.className='search-result';
+        row.innerHTML='<div class="search-result-icon">'+(t.completed?'☑':'☐')+'</div>'
+          +'<div class="search-result-body">'
+          +'<div class="search-result-title">'+highlight(t.text,q)+'</div>'
+          +(sub.length?'<div class="search-result-sub">'+highlight(sub.join(' · '),q)+'</div>':'')
+          +'</div>';
+        (function(m,s,id){row.addEventListener('click',function(){
+          switchMode(m);
+          applyMode(m);
+          setTimeout(function(){
+            var el=document.querySelector('[data-id="'+id+'"]');
+            if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+          },150);
+        });})(hit.mode,hit.sec,t.id);
+        list.appendChild(row);
+        totalCount++;
+      });
+    }
+  }
+
+  // ── NOTES ──
+  if(showNotes){
+    var noteHits=S.notes.filter(function(n){
+      return doesMatch(n.title,q)||doesMatch(n.body,q);
+    });
+    if(noteHits.length){
+      var lbl2=document.createElement('div');lbl2.className='search-group-label';lbl2.textContent='Notes';list.appendChild(lbl2);
+      noteHits.forEach(function(n){
+        var sub=[];
+        if(n.body&&n.body.trim()&&doesMatch(n.body,q))sub.push(n.body.trim().slice(0,80)+(n.body.length>80?'…':''));
+        var row=document.createElement('div');row.className='search-result';
+        row.innerHTML='<div class="search-result-icon">📝</div>'
+          +'<div class="search-result-body">'
+          +'<div class="search-result-title">'+highlight(n.title||'Untitled',q)+'</div>'
+          +(sub.length?'<div class="search-result-sub">'+highlight(sub[0],q)+'</div>':'')
+          +'</div>';
+        (function(id){row.addEventListener('click',function(){openNoteDetail(id);});})(n.id);
+        list.appendChild(row);
+        totalCount++;
+      });
+    }
+  }
+
+  // ── MEETINGS ──
+  if(showMtgs){
+    var mtgHits=S.meetings.filter(function(m){
+      return doesMatch(m.name,q)||doesMatch(m.notes,q);
+    });
+    if(mtgHits.length){
+      var lbl3=document.createElement('div');lbl3.className='search-group-label';lbl3.textContent='Meetings';list.appendChild(lbl3);
+      mtgHits.forEach(function(m){
+        var p=m.date.split('-'),d=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));
+        var dateStr=DAYS[d.getDay()]+' '+d.getDate()+' '+MOS[d.getMonth()];
+        var sub=[dateStr];
+        if(m.time)sub.push(m.time);
+        if(m.recur&&m.recur!=='once')sub.push(rL[m.recur]);
+        if(m.archived)sub.push('Archived');
+        if(m.notes&&m.notes.trim()&&doesMatch(m.notes,q))sub.push('"'+m.notes.trim().slice(0,60)+(m.notes.length>60?'…':'')+'"');
+        var row=document.createElement('div');row.className='search-result';
+        row.innerHTML='<div class="search-result-icon">📅</div>'
+          +'<div class="search-result-body">'
+          +'<div class="search-result-title">'+highlight(m.name,q)+'</div>'
+          +'<div class="search-result-sub">'+highlight(sub.join(' · '),q)+'</div>'
+          +'</div>';
+        (function(id){row.addEventListener('click',function(){openMtgNotes(id);});})(m.id);
+        list.appendChild(row);
+        totalCount++;
+      });
+    }
+  }
+
+  if(totalCount===0){
+    list.innerHTML='<div class="search-empty"><div class="search-empty-ico">😶</div>No results for "'+esc(q)+'"</div>';
+  }
 }
 
 // ── ACCOUNT / PREFS ──────────────────────────────────────────
