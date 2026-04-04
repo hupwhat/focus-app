@@ -1037,11 +1037,44 @@ function nextRecur(iso,recur){
 }
 
 // ── MODE ──────────────────────────────────────────────────────
+function nextBoundaryTs(){
+  // Returns the timestamp of the next work/personal mode boundary from now
+  var n=new Date();
+  var day=n.getDay(),mins=n.getHours()*60+n.getMinutes();
+  var days=S.prefs.workDays||[1,2,3,4,5];
+  var start=S.prefs.workStart!==undefined?S.prefs.workStart:480;
+  var end=S.prefs.workEnd!==undefined?S.prefs.workEnd:1050;
+  var inWork=days.indexOf(day)!==-1&&mins>=start&&mins<end;
+  var boundary=new Date(n);
+  if(inWork){
+    // Next boundary is end of work today
+    boundary.setHours(Math.floor(end/60),end%60,0,0);
+  }else{
+    // Next boundary is start of next work day
+    for(var i=1;i<=7;i++){
+      var nextDay=new Date(n);
+      nextDay.setDate(n.getDate()+i);
+      if(days.indexOf(nextDay.getDay())!==-1){
+        nextDay.setHours(Math.floor(start/60),start%60,0,0);
+        boundary=nextDay;
+        break;
+      }
+    }
+  }
+  return boundary.getTime();
+}
 function autoMode(){
   var n=new Date(),day=n.getDay(),mins=n.getHours()*60+n.getMinutes();
   var days=S.prefs.workDays||[1,2,3,4,5];
   var start=S.prefs.workStart!==undefined?S.prefs.workStart:480;
   var end=S.prefs.workEnd!==undefined?S.prefs.workEnd:1050;
+  // Check for valid manual override
+  var ov=S.prefs.manualOverride;
+  if(ov&&ov.expiresAt&&Date.now()<ov.expiresAt){
+    return ov.mode;
+  }
+  // Override expired — clear it
+  if(ov)S.prefs.manualOverride=null;
   return(days.indexOf(day)!==-1&&mins>=start&&mins<end)?'work':'personal';
 }
 function switchMode(m){
@@ -1050,7 +1083,19 @@ function switchMode(m){
     if(n){n.title=document.getElementById('ndetailTitle').innerText.trim();n.body=document.getElementById('ndetailBody').innerText.trim();save();}
     renderNotes();
   }
-  if(m==='work'||m==='personal')S.prevTaskMode=m;
+  // Set manual override when user explicitly picks work or personal
+  if(m==='work'||m==='personal'){
+    var natural=autoMode();
+    if(m!==natural){
+      // Only set override if it differs from what auto would choose
+      S.prefs.manualOverride={mode:m,expiresAt:nextBoundaryTs()};
+      save();
+    }else{
+      // Matches auto — clear any existing override
+      S.prefs.manualOverride=null;
+    }
+    S.prevTaskMode=m;
+  }
   applyMode(m);
 }
 function goMeetings(){applyMode('meetings');}
