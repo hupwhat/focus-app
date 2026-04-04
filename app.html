@@ -636,6 +636,7 @@ window.save=function(){
   <div class="ndetail-view" id="ndetailView">
     <div class="ndetail-hdr">
       <div contenteditable="true" class="ndetail-title" id="ndetailTitle" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('ndetailBody').focus();}"></div>
+      <button class="ndetail-done" style="background:var(--note-muted);color:var(--note-bg);font-weight:500;margin-right:4px" onclick="shareNote(S.activeNoteId)">Share</button>
       <button class="ndetail-done" onclick="doneNote()">✓ Done</button>
     </div>
     <div contenteditable="true" class="ndetail-body" id="ndetailBody"></div>
@@ -1273,10 +1274,15 @@ function renderTasks(mode,sec){
       noteArea.dataset.sec=sec;
       var ta=document.createElement('textarea');
       ta.className='task-note-inp';ta.rows=2;ta.placeholder='Add a note\u2026';ta.value=t.note||'';
+      var shareBtn=document.createElement('button');
+      shareBtn.className='task-note-close';shareBtn.title='Share';shareBtn.textContent='Share';
+      shareBtn.style.fontSize='11px';shareBtn.style.opacity='0.4';shareBtn.style.fontWeight='600';
+      (function(m2,s2,tid2){shareBtn.addEventListener('click',function(e){e.stopPropagation();shareTask(m2,s2,tid2);});})(mode,sec,t.id);
       var closeBtn=document.createElement('button');
       closeBtn.className='task-note-close';closeBtn.title='Save & close';closeBtn.textContent='✓';
       (function(na){closeBtn.addEventListener('click',function(e){e.stopPropagation();closeTaskNote(na);});})(noteArea);
       noteArea.appendChild(ta);
+      noteArea.appendChild(shareBtn);
       noteArea.appendChild(closeBtn);
 
       wrap.appendChild(card);
@@ -1840,21 +1846,46 @@ function importBackup(input){
 function confirmSignOut(){
   if(confirm('Sign out of Focus?'))window.doSignOut();
 }
-// Share individual meeting notes
+function doShare(title,text){
+  if(navigator.share){
+    navigator.share({title:title,text:text}).catch(function(){});
+  }else if(navigator.clipboard){
+    navigator.clipboard.writeText(text).then(function(){showToast('Copied to clipboard');});
+  }
+}
 function shareMtgNotes(id){
   var m=S.meetings.find(function(x){return x.id===id;});if(!m)return;
   var p=m.date.split('-'),d=new Date(parseInt(p[0]),parseInt(p[1])-1,parseInt(p[2]));
   var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MOS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  var dateStr=DAYS[d.getDay()]+' '+d.getDate()+' '+MOS[d.getMonth()]+(m.time?' · '+m.time:'');
-  var text=m.name+'\n'+dateStr+'\n\n'+(m.notes||'(No notes)');
-  if(navigator.share){
-    navigator.share({title:m.name,text:text}).catch(function(){});
-  }else{
-    // Fallback: copy to clipboard
-    if(navigator.clipboard){
-      navigator.clipboard.writeText(text).then(function(){showToast('Notes copied to clipboard');});
-    }
+  var rL={once:'',weekly:'Weekly',biweekly:'Bi-weekly',monthly:'Monthly',yearly:'Yearly'};
+  var lines=[m.name];
+  lines.push(DAYS[d.getDay()]+' '+d.getDate()+' '+MOS[d.getMonth()]+' '+d.getFullYear()+(m.time?' · '+m.time:''));
+  if(m.recur&&m.recur!=='once')lines.push('Recurrence: '+rL[m.recur]);
+  lines.push('');
+  lines.push(m.notes||'(No notes)');
+  doShare(m.name,lines.join('\n'));
+}
+function shareNote(id){
+  var n=S.notes.find(function(x){return x.id===id;});if(!n)return;
+  var title=n.title&&n.title.trim()?n.title.trim():'Untitled';
+  var lines=[];
+  if(n.title&&n.title.trim())lines.push(n.title.trim());
+  if(n.body&&n.body.trim())lines.push(n.body.trim());
+  doShare(title,lines.join('\n\n')||'(Empty note)');
+}
+function shareTask(mode,sec,id){
+  var t=S.tasks[mode][sec].find(function(x){return x.id===id;});if(!t)return;
+  var rL={once:'',weekly:'Weekly',biweekly:'Bi-weekly',monthly:'Monthly',yearly:'Yearly'};
+  var lines=[t.text];
+  if(t.date){
+    var du=fmtDue(t.date,t.time);
+    var dueStr='Due: '+du;
+    if(t.time)dueStr+=' at '+t.time;
+    lines.push(dueStr);
   }
+  if(t.recur&&t.recur!=='once')lines.push('Recurrence: '+rL[t.recur]);
+  if(t.note&&t.note.trim()){lines.push('');lines.push(t.note.trim());}
+  doShare(t.text,lines.join('\n'));
 }
 
 // ── TOAST ────────────────────────────────────────────────────
